@@ -5,7 +5,7 @@ from Exercise1 import NumericalPathIntegral
 """ This code implements and solves the exercises described at pages 9 and 11 of LePage's article"""
 
 class PathIntegralMonteCarlo:
-    def __init__(self, numerical_integral: NumericalPathIntegral, w=1, eps=1.4, N_cor=20, N_cf=1000, source='x', imp='noghost'):
+    def __init__(self, numerical_integral: NumericalPathIntegral, N_cf = 10000, w=1, eps=1.4, N_cor=20, source='x3', imp='noghost'):
         """
         Initializes the PathIntegralMonteCarlo instance.
 
@@ -37,16 +37,28 @@ class PathIntegralMonteCarlo:
     def update(self):
         """
         Metropolis update for the path configuration.
-        This function performs an update step for each element of the path configuration, using the Metropolis criterion to accept or reject the change.
+        This function performs an update step for each element of the path configuration,
+        using the Metropolis criterion to accept or reject the change.
         Inspired by the update algorithm described in LePage's article, page 8.
         """
+        accepted_moves = 0  # Counter for accepted moves
+        total_moves = 0    # Counter for total moves
+        
         for j in range(self.N):
             old_x = self.x[j]
             old_Sj = self.S(j, self.x)
-            self.x[j] += np.random.uniform(-self.eps, self.eps)
-            dS = self.S(j, self.x) - old_Sj
-            if dS > 0 and np.exp(-dS) < np.random.uniform(0, 1):
-                self.x[j] = old_x
+            self.x[j] += np.random.uniform(-self.eps, self.eps)  # Propose a new value for x[j]
+            dS = self.S(j, self.x) - old_Sj  # Compute the change in the action
+            total_moves += 1  # Increment the total moves counter
+            if dS <= 0 or np.exp(-dS) >= np.random.uniform(0, 1):
+                accepted_moves += 1  # Increment the accepted moves counter if accepted
+            else:
+                self.x[j] = old_x  # Revert to the previous value if not accepted
+        
+        acceptance_rate = accepted_moves / total_moves if total_moves > 0 else 0
+
+        return acceptance_rate
+
 
     def S(self, j, x):
         """
@@ -92,22 +104,35 @@ class PathIntegralMonteCarlo:
 
     def MCaverage(self, x, G):
         """
-        Computes the Monte Carlo average of the two-point correlation function G.
-
+        Computes the Monte Carlo average of the two-point correlation function G,
+        and prints the average acceptance rate over all updates.
+        
         Args:
             x (ndarray): Array representing the path configuration.
             G (ndarray): Array to store the computed correlation functions for each configuration.
-        
-        This function includes a thermalization step before computing the correlation functions, as discussed on page 8 of LePage's article.
         """
         x.fill(0)
+        total_acceptance_rate = 0  # Accumulator for acceptance rates
+        num_updates = 0  # Counter for the number of updates
+        
+        # Thermalization step
         for _ in range(10 * self.N_cor):
-            self.update()
+            total_acceptance_rate += self.update()
+            num_updates += 1
+            
+            # Compute configurations
         for alpha in range(self.N_cf):
             for _ in range(self.N_cor):
-                self.update()
+                total_acceptance_rate += self.update()
+                num_updates += 1
             for n in range(self.N):
                 G[alpha][n] = self.compute_G(x, n)
+
+        # Calculate the average acceptance rate
+        avg_acceptance_rate = total_acceptance_rate / num_updates
+
+        # Print the average acceptance rate
+        print(f"Average acceptance rate over all updates: {avg_acceptance_rate * 100:.2f}%")
 
     def deltaE(self, G_avgd_over_paths):
         """
