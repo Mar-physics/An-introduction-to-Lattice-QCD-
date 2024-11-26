@@ -6,7 +6,7 @@ from scipy.optimize import curve_fit
 L = 50  # Lattice size (spatial points)
 N_steps = 5000  # Number of Monte Carlo steps
 beta = 1.0  # Coupling constant set to 1
-max_time = 20  # Limit the time slice to the first 10 time steps (t=0 to t=9)
+max_time = 20  # Limit the time slice
 
 # Function to initialize a scalar field
 def initialize_scalar_field(L):
