@@ -3,8 +3,7 @@ import matplotlib.pyplot as plt
 from scipy import optimize
 
 class EOMSolver:
-    def __init__(self, N=100, w0=1, m=1, a=np.linspace(0.1, 0.5, 100), mode = 'n'):
-        
+    def __init__(self, N=100, w0=1, m=1, a=np.linspace(0.1, 0.5, 100), mode='n'):
         """
         Initialize the Equation of Motion (EOM) solver.
 
@@ -15,24 +14,29 @@ class EOMSolver:
         a (array): Array of lattice spacings.
         mode (str): Mode for the action ('n' for unimproved, 'y' for improved, 'no_ghost' for ghost-free improved).
         """
-        
         valid_modes = ['n', 'y', 'no_ghost']
         if mode not in valid_modes:
             raise ValueError(f"Invalid mode '{mode}'. Valid modes are: {', '.join(valid_modes)}")
         
-        self.N = N  # Number of points
+        self.N = N  # Number of lattice points
         self.w0 = w0  # Frequency parameter
-        self.m = m  # Mass (currently unused but kept for generality)
+        self.m = m  # Mass parameter (currently unused)
         self.a = a  # Array of lattice spacings
         self.T = self.N * self.a  # Total time for each lattice spacing
-        self.mode = mode
-        
-        
-    
+        self.mode = mode  # Selected mode for action discretization
+
     def build_matrix(self, a):
-        
+        """
+        Construct the coefficient matrix for the discrete EOM.
+
+        Parameters:
+        a (float): Lattice spacing.
+
+        Returns:
+        ndarray: The coefficient matrix.
+        """
         matrix = np.zeros((self.N, self.N))  # Initialize an NxN matrix
-        
+
         if self.mode == 'n':
             diagonal = -(2 + a**2 * self.w0**2)  # Main diagonal elements
             off_diagonal = 1  # Off-diagonal elements
@@ -61,24 +65,33 @@ class EOMSolver:
                     matrix[i, i + 2] = coeff_j_pm_2
                     
         elif self.mode == 'no_ghost':
-            
-            diagonal = -(2 + (a * self.w0)**2 * (1 + (a * self.w0)**2 / 12))  # Main diagonal elements
+            diagonal = -(2 + (a * self.w0)**2 * (1 + (a * self.w0)**2 / 12))  # Main diagonal
             off_diagonal = 1  # Off-diagonal elements
             
             for i in range(self.N):
-                matrix[i, i] = diagonal  # Main diagonal
+                matrix[i, i] = diagonal
                 if i > 0:
-                    matrix[i, i - 1] = off_diagonal  # Lower diagonal
+                    matrix[i, i - 1] = off_diagonal
                 if i < self.N - 1:
-                    matrix[i, i + 1] = off_diagonal  # Upper diagonal
+                    matrix[i, i + 1] = off_diagonal
         
         return matrix
-    
-    
+
     def boundary_conditions(self, xi, xf, xi2, xf2):
-        
-        B = np.zeros(self.N)
-        
+        """
+        Define the boundary conditions for the EOM.
+
+        Parameters:
+        xi (float): Initial boundary condition.
+        xf (float): Final boundary condition.
+        xi2 (float): Condition at t_{-2}.
+        xf2 (float): Condition at t_{N+1}.
+
+        Returns:
+        ndarray: The boundary condition vector.
+        """
+        B = np.zeros(self.N)  # Initialize the boundary condition vector
+
         if self.mode in ['n', 'no_ghost']:
             B[0] = -xi
             B[-1] = -xf
@@ -90,48 +103,55 @@ class EOMSolver:
             B[-1] = (1 / 12) * xf2 - (4 / 3) * xf
         
         return B
-    
+
     @staticmethod
     def fit_solution(solution, t):
-        
         """
         Fit the solution to an exponential function and extract the squared frequency.
-       
+
         Parameters:
-            solution (ndarray): The computed solution.
-            t (ndarray): The time array.
+        solution (ndarray): The computed solution.
+        t (ndarray): The time array.
 
         Returns:
-            float: The squared frequency extracted from the fit.
-       """
-       
+        float: The squared frequency extracted from the fit.
+        """
         def exp_func(t, A, w, phi):
             return A * np.exp(-w * t + phi)
 
         param, _ = optimize.curve_fit(exp_func, t, solution, p0=(0.1, 1, 0))
         return param[1] ** 2
-    
+
     def perform_analysis(self):
-        
+        """
+        Perform the numerical analysis for different lattice spacings.
+
+        Returns:
+        ndarray: The computed squared frequencies for each lattice spacing.
+        """
         w2 = np.empty(len(self.a))
         for i, ai in enumerate(self.a):
-            t = np.arange(0, self.N) * ai
-            xi = np.exp(0)  # Boundary condition at t_0
-            xf = np.exp(-self.T[i])  # Boundary condition at t_N
+            t = np.arange(0, self.N) * ai  # Time array for the given lattice spacing
+            xi = np.exp(0)  # Initial boundary condition
+            xf = np.exp(-self.T[i])  # Final boundary condition
             xi2 = np.exp(-(-ai))  # Condition at t_{-2}
             xf2 = np.exp(-self.T[i] + ai)  # Condition at t_{N+1}
 
-            A = self.build_matrix(ai)
-            B = self.boundary_conditions(xi, xf, xi2, xf2)
-            X = np.linalg.solve(A, B)
+            A = self.build_matrix(ai)  # Coefficient matrix
+            B = self.boundary_conditions(xi, xf, xi2, xf2)  # Boundary conditions
+            X = np.linalg.solve(A, B)  # Solve the linear system
 
-            w2[i] = self.fit_solution(X, t)
+            w2[i] = self.fit_solution(X, t)  # Fit the solution and extract squared frequency
 
         return w2
-    
-    
+
     def expected_frequency_squared(self):
-        
+        """
+        Compute the expected theoretical squared frequencies.
+
+        Returns:
+        ndarray: Theoretical squared frequencies for each lattice spacing.
+        """
         if self.mode == 'n':
             return self.w0**2 * (1 - (self.a * self.w0)**2 / 12)
         
@@ -140,10 +160,11 @@ class EOMSolver:
         
         if self.mode == 'no_ghost':
             return self.w0**2 * (1 - (self.a * self.w0)**4 / 360)
-    
-    
+
     def plot_results(self):
-        
+        """
+        Plot the numerical and theoretical squared frequencies.
+        """
         w2 = self.perform_analysis()
         expected = self.expected_frequency_squared()
         plt.figure(figsize=(8, 6))
@@ -155,26 +176,26 @@ class EOMSolver:
             
         elif self.mode == 'y':
             plt.title('Results for improved discretized S[x]')
-            plt.scatter(self.a, w2, s=10, color = 'orange', label='Computed Frequency Squared')
-            plt.plot(self.a, expected, color = 'orange', label='Expected')
+            plt.scatter(self.a, w2, s=10, color='orange', label='Computed Frequency Squared')
+            plt.plot(self.a, expected, color='orange', label='Expected')
             
         elif self.mode == 'no_ghost':
             plt.title('Results for no-ghost discretized S[x]')
-            plt.scatter(self.a, w2, s=10, color = 'green', label='Computed Frequency Squared')
-            plt.plot(self.a, expected, color = 'green', label='Expected')
+            plt.scatter(self.a, w2, s=10, color='green', label='Computed Frequency Squared')
+            plt.plot(self.a, expected, color='green', label='Expected')
             
         plt.xlabel('Lattice spacing: a')
         plt.ylabel('$\\omega^2$')
         plt.legend()
         plt.show()
-    
+
     def compute_ghost_mode(self):
         """
         Compute the ghost mode frequency for the improved action and fit it to the expected theoretical relation.
-        
+
         Returns:
-            dict: Contains lattice spacings, numerical ghost mode frequencies, theoretical frequencies, and fit results.
-       """
+        dict: Contains lattice spacings, numerical ghost mode frequencies, theoretical frequencies, and fit results.
+        """
         ghost = np.empty(len(self.a))
 
         for i, ai in enumerate(self.a):
@@ -182,8 +203,8 @@ class EOMSolver:
                 # Ghost mode equation from the improved discretization
                 return (
                     np.exp(-2 * ai * w) - 16 * np.exp(-ai * w) + 30
-                    - 16 * np.exp(ai * w) + np.exp(2 * ai * w) 
-                    )
+                    - 16 * np.exp(ai * w) + np.exp(2 * ai * w)
+                )
 
             # Use a better initial guess close to the theoretical ghost mode
             initial_guess = 2.6 / ai
@@ -218,9 +239,10 @@ class EOMSolver:
         plt.grid(True)
         plt.show()
 
+
 if __name__ == '__main__':
     
-    """# Modalità da analizzare
+    # Modalità da analizzare
     modes = ['n', 'y', 'no_ghost']
 
     # Colori per i grafici
@@ -260,9 +282,7 @@ if __name__ == '__main__':
     plt.grid(True)
 
     # Mostra il grafico combinato
-    plt.show()"""
-    solver = EOMSolver(mode = 'no_')
-    solver.plot_results()
+    plt.show()
         
             
         
