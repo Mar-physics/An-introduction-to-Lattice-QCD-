@@ -1,0 +1,10 @@
+numpy
+matplotlib.pyplot
+functools
+vegas
+scipy
+numba
+math
+tdqm
+
+
